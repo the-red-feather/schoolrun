@@ -36,13 +36,13 @@ export function fromLocal(x: number, y: number, o: Geo): Geo {
 }
 
 export function centroid(gs: Geo[]): Geo {
-  if (!gs.length) return { lat: 52.0116, lon: 4.3571 };
+  if (!gs.length) return { lat: 51.9914, lon: 4.4739 };
   return { lat: gs.reduce((s, g) => s + g.lat, 0) / gs.length, lon: gs.reduce((s, g) => s + g.lon, 0) / gs.length };
 }
 
 /** The zoom (fractional) and centre that fit all points into w × h pixels with `pad` around. */
 export function fit(gs: Geo[], w: number, h: number, pad = 60): { lat: number; lon: number; zoom: number } {
-  if (!gs.length) return { lat: 52.0116, lon: 4.3571, zoom: 13 };
+  if (!gs.length) return { lat: 51.9914, lon: 4.4739, zoom: 13 };
   let lo = 2,
     hi = 18;
   for (let i = 0; i < 30; i++) {

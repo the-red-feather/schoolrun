@@ -14,7 +14,9 @@ browser. Dutch by default, English with one click.
 
 - **Planning**: the day's numbers, today's crew (tap a colleague to call them
   in sick, tap a vehicle to take it off the road, and watch the plan change),
-  the problems (*knelpunten*), a grey street map with a km grid and the routes,
+  the problems (*knelpunten*), a grey street map with a km grid and the routes
+  (drag with any mouse button; click a location for its card and *Verplaatsen*
+  to move it),
   a clock you can play or scrub, who is where right now (names on board,
   children still waiting, arrivals per BSO), the afternoon as a timeline, and
   per vehicle its runs with every child's name: the driver's sheet.
@@ -27,8 +29,9 @@ browser. Dutch by default, English with one click.
   bus licence, D), staff (licence, days, hours), colleagues who need a lift
   (*meerijden*), and the rules the solver plays by.
 
-The default week is set in Delft: 2 BSOs, 7 schools, 86 children with Dutch
-names (5 to 20 per school, some schools split over both BSOs). Henk is the
+The default week is set in Berkel en Rodenrijs: 2 BSOs near the centre, 7
+schools all around the village, 86 children with Dutch names (5 to 20 per
+school, some schools split over both BSOs). Henk is the
 only one with a bus licence and doesn't work Wednesday and Friday, so on those
 days the bus stays put. Call him in sick on a Monday to see what that does.
 

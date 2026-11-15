@@ -200,6 +200,34 @@ export function neighbour(dm: DayModel, p0: Plan, rand: Rand): Plan | null {
   return tidy(p);
 }
 
+const ROUNDS = 3;
+/** How often a step is a ruin-and-recreate instead of a small move. */
+const RUIN = 0.06;
+
+/**
+ * Ruin and recreate: take out one or two pickups (or a whole run) and put
+ * them back where each adds least. Finds the big rearrangements (a group
+ * split over other vehicles) that small random moves rarely stumble on.
+ */
+export function ruin(dm: DayModel, p0: Plan, rand: Rand, share = 0): Plan | null {
+  const p = clone(p0);
+  const all = slots(p);
+  if (!all.length) return null;
+  if (share > 0) {
+    for (const s of all) if (rand() < share) p[s.b]![s.r]![s.i]!.n = 0;
+  } else if (rand() < 0.3) {
+    const withRuns = p.filter((r) => r.length);
+    const runs = pick(withRuns, rand);
+    runs.splice(Math.floor(rand() * runs.length), 1);
+  } else {
+    const k = 1 + Math.floor(rand() * Math.min(3, all.length));
+    const out = new Set<Slot>();
+    while (out.size < k) out.add(pick(all, rand));
+    for (const s of [...out].sort((a, b) => b.i - a.i)) p[s.b]![s.r]![s.i]!.n = 0;
+  }
+  return insertMissing(dm, tidy(p));
+}
+
 export class Solver {
   readonly dm: DayModel;
   private rand: Rand;
@@ -237,9 +265,16 @@ export class Solver {
   step(n: number): boolean {
     let improved = false;
     const end = Math.min(this.total, this.done + n);
+    const round = this.total / ROUNDS;
     for (; this.done < end; this.done++) {
-      const temp = this.t0 * Math.pow(0.0005, this.done / this.total);
-      const next = neighbour(this.dm, this.cur, this.rand);
+      // three rounds, each reheating from the best plan so far (a bit cooler each time): out of local minima
+      const r = Math.min(ROUNDS - 1, Math.floor(this.done / round));
+      if (this.done > 0 && this.done === Math.ceil(r * round)) {
+        this.cur = this.best;
+        this.curCost = this.bestResult.cost;
+      }
+      const temp = (this.t0 / (1 + r)) * Math.pow(0.0005, (this.done - r * round) / round);
+      const next = this.rand() < RUIN ? ruin(this.dm, this.cur, this.rand) : neighbour(this.dm, this.cur, this.rand);
       if (!next) continue;
       const res = schedule(this.dm, next);
       const d = res.cost - this.curCost;

@@ -34,7 +34,7 @@ export function checkScenario(raw: unknown): Scenario | null {
   const r = raw as Record<string, any>;
   if (r.version !== 2 && Array.isArray(r.places) && r.hub) return fromV1(r);
   if (!Array.isArray(r.bsos) || !Array.isArray(r.schools)) return null;
-  const base = { lat: 52.0116, lon: 4.3571 };
+  const base = { lat: 51.9914, lon: 4.4739 };
 
   const bsos: Bso[] = unique(
     arr(r.bsos).map((b, i) => ({ id: str(b?.id, ""), name: str(b?.name, `BSO ${i + 1}`), lat: lat(b?.lat, base.lat), lon: lon(b?.lon, base.lon), color: Math.round(num(b?.color, i, 0, BSO_COLORS.length - 1)) })),
@@ -131,9 +131,9 @@ export function checkScenario(raw: unknown): Scenario | null {
   return { version: 2, name: str(r.name, "Schoolrun", 60), bsos, schools, kids, vehicles, staff, rides, rules, absent, view };
 }
 
-/** The first SCHOOLRUN (one hub, places in km on a 10 × 10 map, kids as numbers): put it in Delft, give the children names. */
+/** The first SCHOOLRUN (one hub, places in km on a 10 × 10 map, kids as numbers): put it in Berkel en Rodenrijs, give the children names. */
 function fromV1(r: Record<string, any>): Scenario | null {
-  const o = { lat: 52.0116, lon: 4.3571 };
+  const o = { lat: 51.9914, lon: 4.4739 };
   const at = (p: any) => fromLocal((num(p?.x, 5, 0, 10) - 5) * 0.8, (5 - num(p?.y, 5, 0, 10)) * 0.8, o);
   const places = new Map<string, any>(arr(r.places).map((p) => [p?.id, p]));
   const name = nameMaker(1);

@@ -1,5 +1,6 @@
 /**
- * The default week: two BSOs and seven schools in Delft, 86 children with
+ * The default week: two BSOs in Berkel en Rodenrijs and seven schools all
+ * around the village, 86 children with
  * Dutch names, three vans and a bus. Henk is the only one with a bus licence
  * and doesn't work on Wednesday and Friday: on those days the bus stays put.
  */
@@ -26,6 +27,11 @@ export const LAST_NAMES = [
   "van Dam", "Prins", "Blom", "Huisman", "Kuipers", "Postma", "Kramer", "El Idrissi", "Yilmaz", "Bouzid", "Kaya", "Ramdin",
   "Nguyen", "Öztürk", "Boateng", "Sanchez", "Pinas",
 ];
+/** Berkel en Rodenrijs (Lansingerland): where the default week is. */
+export const HOME = { lat: 51.9914, lon: 4.4739 };
+/** The default week's name; a stored week called this is the untouched example of an older version. */
+export const OLD_SAMPLE_NAMES = ["Delft"];
+
 export const SCHOOL_NAMES = [
   "De Regenboog", "Het Kompas", "Sint Jozefschool", "De Wilgenhoek", "Montessori De Vlinder", "De Zonnewijzer", "Het Palet",
   "De Klimboom", "Het Anker", "De Kleine Prins", "Jenaplan De Boomgaard", "De Fontein", "Het Mozaïek", "De Springplank", "Het Talent",
@@ -77,26 +83,26 @@ function makeKids(r: () => number, name: () => string, schools: School[], split:
 
 export function sampleScenario(): Scenario {
   const bsos: Bso[] = [
-    { id: "b1", name: "BSO De Boomhut", lat: 52.0003, lon: 4.3527, color: 0 },
-    { id: "b2", name: "BSO Het Kasteel", lat: 52.0176, lon: 4.3702, color: 1 },
+    { id: "b1", name: "BSO De Boomhut", lat: 51.996, lon: 4.4681, color: 0 },
+    { id: "b2", name: "BSO Het Kasteel", lat: 51.9833, lon: 4.4812, color: 1 },
   ];
   const sch = (id: string, name: string, lat: number, lon: number, color: number, out: Week<number | null>, escort = false): School => ({ id, name, lat, lon, color, out, escort });
   const schools: School[] = [
-    sch("s1", "De Regenboog", 51.9934, 4.3478, 0, [T(14), T(14), T(12, 15), T(14), T(12)], true),
-    sch("s2", "Het Kompas", 52.0121, 4.3763, 1, [T(15, 15), T(15, 15), T(12, 30), T(15, 15), T(15, 15)]),
-    sch("s3", "Sint Jozefschool", 52.0104, 4.3488, 2, [T(14, 15), T(14, 15), T(12, 15), T(14, 15), T(14, 15)], true),
-    sch("s4", "De Wilgenhoek", 52.0051, 4.3388, 3, [T(14), T(14), T(12, 30), T(14), T(12)]),
-    sch("s5", "Montessori De Vlinder", 52.0031, 4.3762, 4, [T(14, 45), T(14, 45), T(12, 15), T(14, 45), T(14, 45)]),
-    sch("s6", "De Zonnewijzer", 51.9961, 4.3331, 8, [T(14, 15), T(14, 15), T(12, 30), T(14, 15), T(12, 30)]),
-    sch("s7", "Het Palet", 52.0226, 4.3579, 9, [T(15), T(15), T(12), T(15), T(15)]),
+    sch("s1", "De Regenboog", 51.986, 4.4535, 0, [T(14), T(14), T(12, 15), T(14), T(12)], true),
+    sch("s2", "Het Kompas", 51.995, 4.4958, 1, [T(15, 15), T(15, 15), T(12, 30), T(15, 15), T(15, 15)]),
+    sch("s3", "Sint Jozefschool", 52.0059, 4.4754, 2, [T(14, 15), T(14, 15), T(12, 15), T(14, 15), T(14, 15)], true),
+    sch("s4", "De Wilgenhoek", 51.9996, 4.4506, 3, [T(14), T(14), T(12, 30), T(14), T(12)]),
+    sch("s5", "Montessori De Vlinder", 51.9779, 4.4914, 4, [T(14, 45), T(14, 45), T(12, 15), T(14, 45), T(14, 45)]),
+    sch("s6", "De Zonnewijzer", 51.9742, 4.4651, 8, [T(14, 30), T(14, 30), T(12, 30), T(14, 30), T(12, 30)]),
+    sch("s7", "Het Palet", 51.9896, 4.5002, 9, [T(15), T(15), T(12), T(15), T(15)]),
   ];
   const split: Record<string, [string, number][]> = {
     s1: [["b1", 13], ["b2", 5]],
     s2: [["b2", 7]],
-    s3: [["b2", 15], ["b1", 5]],
+    s3: [["b1", 15], ["b2", 5]],
     s4: [["b1", 12]],
     s5: [["b2", 5]],
-    s6: [["b1", 11], ["b2", 4]],
+    s6: [["b2", 11], ["b1", 4]],
     s7: [["b2", 9]],
   };
   const kids = makeKids(rng(7), nameMaker(42), schools, split);
@@ -122,11 +128,11 @@ export function sampleScenario(): Scenario {
     { id: "r1", who: "Noor Jansen (invaller)", from: "b2", to: "b1", after: T(14, 20), before: T(14, 50), days: d(0, 3) },
     { id: "r2", who: "Lotte Brouwer", from: "b1", to: "s7", after: T(14, 30), before: T(14, 55), days: d(1) },
   ];
-  return { version: 2, name: "Delft", bsos, schools, kids, vehicles, staff, rides, rules: { ...DEFAULT_RULES }, absent: [[], [], [], [], []] };
+  return { version: 2, name: "Berkel en Rodenrijs", bsos, schools, kids, vehicles, staff, rides, rules: { ...DEFAULT_RULES }, absent: [[], [], [], [], []] };
 }
 
 /** A random town around `o`: 2–3 BSOs, 5–9 schools of 5–20 children, some split over two BSOs. */
-export function randomScenario(seed: number, o = { lat: 52.0116, lon: 4.3571 }): Scenario {
+export function randomScenario(seed: number, o: { lat: number; lon: number } = HOME): Scenario {
   const r = rng(seed);
   const nB = 2 + (r() < 0.3 ? 1 : 0);
   const nS = 5 + Math.floor(r() * 5);
@@ -174,7 +180,7 @@ export function randomScenario(seed: number, o = { lat: 52.0116, lon: 4.3571 }):
 }
 
 /** An empty week: one BSO, nothing else. */
-export function emptyScenario(o = { lat: 52.0116, lon: 4.3571 }): Scenario {
+export function emptyScenario(o: { lat: number; lon: number } = HOME): Scenario {
   return {
     version: 2,
     name: "Nieuw",

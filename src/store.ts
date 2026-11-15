@@ -7,7 +7,7 @@
 import type { ReactiveController, ReactiveControllerHost } from "lit";
 import { checkScenario } from "./model/check";
 import { buildDay, type DayModel } from "./model/day";
-import { sampleScenario } from "./model/sample";
+import { OLD_SAMPLE_NAMES, sampleScenario } from "./model/sample";
 import { finalize, type Plan, type Result } from "./model/schedule";
 import { trips, type Trip } from "./model/sim";
 import { Solver } from "./model/solver";
@@ -15,6 +15,7 @@ import type { Day, MapView, Scenario } from "./model/types";
 import { setLang, type Lang } from "./i18n";
 
 const KEY = "schoolrun.v2";
+const ATTEMPTS = 3;
 const PREFS = "schoolrun.v2.prefs";
 const SAVES = "schoolrun.v2.saves";
 
@@ -90,6 +91,8 @@ class Store {
   stored = true;
   toast: { text: string; at: number } | null = null;
 
+  /** Which try this is: a plan with problems gets up to ATTEMPTS fresh starts. */
+  attempt = 1;
   private plans = new Map<string, { plan: Plan; vehicles: string[] }>();
   private solver: Solver | null = null;
   private seed = 1;
@@ -98,7 +101,14 @@ class Store {
   private listeners = new Set<() => void>();
 
   constructor() {
-    this.sc = checkScenario(read(KEY)) ?? sampleScenario();
+    const stored = checkScenario(read(KEY));
+    if (stored && OLD_SAMPLE_NAMES.includes(stored.name)) {
+      // the example moved: keep the old one as a save, start from the new one
+      const saves = read<Saved[]>(SAVES) ?? [];
+      write(SAVES, [{ name: `${stored.name} (oud voorbeeld)`, at: Date.now(), scenario: stored }, ...saves]);
+      this.sc = sampleScenario();
+      write(KEY, this.sc);
+    } else this.sc = stored ?? sampleScenario();
     const p = read<Partial<Prefs>>(PREFS) ?? {};
     this.prefs = {
       lang: p.lang === "en" || p.lang === "nl" ? p.lang : defaultLang(),
@@ -209,23 +219,34 @@ class Store {
   }
 
   /** Solve the day again, from the last plan for this weekday (or from scratch), a few milliseconds a frame. */
-  solve(fresh = false) {
+  solve(fresh = false, attempt = 1) {
     clearTimeout(this.timer);
     if (fresh) this.seed++;
     const prev = fresh ? undefined : this.plans.get(this.planKey());
     const s = new Solver(this.dm, { seed: this.seed, from: prev?.plan, vehicles: prev?.vehicles });
     this.solver = s;
-    this.adopt(s);
+    this.attempt = attempt;
+    // a later attempt only replaces the plan shown when it's better
+    const keep = attempt > 1 && this.res && this.rdm === s.dm ? this.res.cost : Infinity;
+    const better = () => s.bestResult.cost < keep - 1e-9;
+    if (better()) this.adopt(s);
     this.progress = s.finished ? 1 : 0;
     const tick = () => {
       if (this.solver !== s) return;
       const t0 = performance.now();
-      let better = false;
-      while (!s.finished && performance.now() - t0 < 12) better = s.step(200) || better;
-      if (better) this.adopt(s);
+      let improved = false;
+      while (!s.finished && performance.now() - t0 < 12) improved = s.step(200) || improved;
+      if (improved && better()) this.adopt(s);
       this.progress = s.finished ? 1 : s.done / s.total;
-      if (s.finished) this.solver = null;
-      else requestAnimationFrame(tick);
+      if (s.finished) {
+        this.solver = null;
+        // still trouble? try again from scratch, another way (twice at most), keep the best
+        const r = this.res;
+        if (r && attempt < ATTEMPTS && (r.lateKids || r.escortMissing || r.ridesLate || r.overtime > 0.5)) {
+          this.solve(true, attempt + 1);
+          return;
+        }
+      } else requestAnimationFrame(tick);
       this.notify();
     };
     requestAnimationFrame(tick);

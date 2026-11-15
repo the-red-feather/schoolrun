@@ -529,7 +529,7 @@ export class SrPlan extends LitElement {
       <div class="seg" title=${L().plan.speed}>
         ${speeds.map((s) => html`<button class=${store.prefs.speed === s ? "on" : ""} @click=${() => store.pref("speed", s)}>${s}×</button>`)}
       </div>
-      <span class="solving">${store.solving ? html`${L().plan.solving}<span class="meter"><i style="width:${store.progress * 100}%"></i></span>` : html`${icon("check", 15)} ${L().plan.solved}`}</span>
+      <span class="solving">${store.solving ? html`${L().plan.solving}${store.attempt > 1 ? ` (${L().plan.attempt(store.attempt)})` : ""}<span class="meter"><i style="width:${store.progress * 100}%"></i></span>` : html`${icon("check", 15)} ${L().plan.solved}`}</span>
       <button class="btn small ghost" title=${L().plan.againTitle} @click=${() => store.solve(true)}>${icon("dice", 16)} ${L().plan.again}</button>
     </div>`;
   }

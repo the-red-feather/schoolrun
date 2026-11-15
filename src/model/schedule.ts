@@ -273,15 +273,16 @@ export function timeRun(dm: DayModel, jobs: Job[], start: string, free: number, 
   const escort = infos.some((i) => i.escort);
   let best = bestOrder(dm, jobs, infos, start, free, escort, until);
   let bestCost = judge(dm, best, until);
+  // leave later by the first wait on the way, again and again, as long as it costs nothing
   const drop = dm.sc.rules.drop;
-  const slacks = best.stops.filter((s) => s.on.length).map((s) => s.on[0]!.pickup - s.arrive - (s.off.length ? drop : 0)).filter((g) => g > 1e-6);
-  for (const slack of slacks) {
-    const x = bestOrder(dm, jobs, infos, start, free + slack, escort, until);
+  for (let i = 0; i < 8; i++) {
+    const gap = best.stops.map((s) => (s.on.length ? s.on[0]!.pickup - s.arrive - (s.off.length ? drop : 0) : 0)).find((g) => g > 1e-6);
+    if (!gap) break;
+    const x = bestOrder(dm, jobs, infos, start, best.depart + gap, escort, until);
     const c = judge(dm, x, until);
-    if (c <= bestCost + 1e-9) {
-      best = x;
-      bestCost = c;
-    }
+    if (c > bestCost + 1e-9) break;
+    best = x;
+    bestCost = c;
   }
   const out = { ...best, needsEscort: escort, start };
   if (cache.size > 200_000) cache.clear();

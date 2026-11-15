@@ -2,8 +2,9 @@
  * The map: a grey street map underneath (OpenStreetMap's tiles, greyed out
  * with a filter, inverted in the dark), a kilometre grid on top, and the
  * afternoon on it: BSOs, schools, routes as straight lines, vehicles moving
- * along them. Pan, zoom (wheel, pinch, buttons), drag locations when moving
- * is on, click to place, look up an address.
+ * along them. Pan with any mouse button (no context menu), zoom (wheel,
+ * pinch, buttons). Click a location for its card; "move" there makes it
+ * draggable (or click where it goes). Look up an address.
  */
 import { LitElement, css, html, nothing, svg } from "lit";
 import { customElement, state } from "lit/decorators.js";
@@ -36,7 +37,10 @@ export class SrMap extends LitElement {
   @state() private w = 800;
   @state() private h = 560;
   @state() private view = { lat: 52.0116, lon: 4.3571, zoom: 13 };
-  @state() private moveMode = false;
+  /** The location whose card is open. */
+  @state() private selected: string | null = null;
+  /** The location being moved: drag it, or click where it goes. */
+  @state() private movingId: string | null = null;
   @state() private found: { name: string; lat: number; lon: number }[] = [];
   @state() private query = "";
   @state() private searching = false;
@@ -130,8 +134,73 @@ export class SrMap extends LitElement {
       [data-id] {
         cursor: pointer;
       }
-      .moving [data-id] {
+      [data-id].sel .mk {
+        stroke: var(--ink);
+        stroke-width: 3;
+      }
+      [data-id].moving {
         cursor: move;
+      }
+      .ring {
+        fill: none;
+        stroke: var(--pop);
+        stroke-width: 2.5;
+        stroke-dasharray: 5 4;
+        animation: spin 6s linear infinite;
+        transform-box: fill-box;
+        transform-origin: center;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .popup {
+        flex-direction: column;
+        gap: 6px;
+        width: 250px;
+        background: var(--surface);
+        border: 1.5px solid var(--hair);
+        border-top: 5px solid var(--c);
+        border-radius: 14px;
+        padding: 10px 12px 12px;
+        box-shadow: var(--shadow), 0 10px 30px rgba(0, 0, 0, 0.15);
+        font-size: 0.82rem;
+        line-height: 1.4;
+        transform: translate(-50%, calc(-100% - 22px));
+      }
+      .popup.below {
+        transform: translate(-50%, 26px);
+      }
+      .popup h3 {
+        font-size: 0.95rem;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .popup .lines {
+        color: var(--dim);
+        display: grid;
+        gap: 2px;
+      }
+      .popup .lines span {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        flex-wrap: wrap;
+      }
+      .popup .lines b {
+        color: var(--ink);
+      }
+      .popup .acts {
+        display: flex;
+        gap: 6px;
+        margin-top: 4px;
+      }
+      .popup .btn.on {
+        background: var(--pop);
+        border-color: var(--pop);
+        color: #fff;
       }
       .school circle.mk,
       .bso rect.mk {
@@ -274,11 +343,18 @@ export class SrMap extends LitElement {
   override connectedCallback() {
     super.connectedCallback();
     this.ro.observe(this);
+    addEventListener("keydown", this.esc);
   }
   override disconnectedCallback() {
     super.disconnectedCallback();
     this.ro.disconnect();
+    removeEventListener("keydown", this.esc);
   }
+  private esc = (e: KeyboardEvent) => {
+    if (e.key !== "Escape") return;
+    if (this.movingId) this.movingId = null;
+    else this.selected = null;
+  };
 
   override willUpdate() {
     if (this.sized && store.fitNonce !== this.fitNonce) {
@@ -339,8 +415,9 @@ export class SrMap extends LitElement {
       this.gesture = { kind: "pinch", d0: Math.hypot(a.x - b.x, a.y - b.y), z0: this.view.zoom, mid: this.toGeo((a.x + b.x) / 2, (a.y + b.y) / 2) };
       return;
     }
-    const mark = (e.target as Element).closest("[data-id]")?.getAttribute("data-id");
-    if (mark && (this.moveMode || mark.startsWith("veh:"))) {
+    // only the left button (or a finger) acts on markers; the others always pan
+    const mark = e.button === 0 ? (e.target as Element).closest("[data-id]")?.getAttribute("data-id") : null;
+    if (mark) {
       this.gesture = { kind: "mark", id: mark, moved: false, start: p };
       return;
     }
@@ -368,12 +445,17 @@ export class SrMap extends LitElement {
       g.moved = true;
       this.view = { ...unproject(g.c0.x - dx, g.c0.y - dy, this.view.zoom), zoom: this.view.zoom };
       this.keepView();
-    } else if (g.kind === "mark" && this.moveMode && !g.id.startsWith("veh:")) {
-      if (!g.moved && Math.hypot(p.x - g.start.x, p.y - g.start.y) < 3) return;
+    } else if (g.kind === "mark") {
+      if (!g.moved && Math.hypot(p.x - g.start.x, p.y - g.start.y) < 4) return;
+      if (g.id !== this.movingId) {
+        // dragging from a marker that isn't being moved: just pan
+        this.gesture = { kind: "pan", start: g.start, c0: this.center(), moved: true };
+        this.move(e);
+        return;
+      }
       if (!g.moved) store.checkpoint();
       g.moved = true;
-      const geo = this.toGeo(p.x, p.y);
-      this.setPlace(g.id, geo, true);
+      this.setPlace(g.id, this.toGeo(p.x, p.y), true);
     }
   }
 
@@ -395,13 +477,25 @@ export class SrMap extends LitElement {
         store.focus = store.focus === id ? null : id;
         store.notify();
       } else if (g.moved) store.edit(() => {}, { now: true, noUndo: true });
-    } else if (g.kind === "pan" && !g.moved && store.placing) {
-      this.setPlace(store.placing.id, this.toGeo(p.x, p.y), false);
-      store.placing = null;
-      store.notify();
-    } else if (g.kind === "pan" && !g.moved && store.focus) {
-      store.focus = null;
-      store.notify();
+      else {
+        if (this.movingId && this.movingId !== g.id) this.movingId = null;
+        this.selected = this.selected === g.id && !this.movingId ? null : g.id;
+      }
+    } else if (g.kind === "pan" && !g.moved && e.button === 0) {
+      const at = this.toGeo(p.x, p.y);
+      if (store.placing) {
+        this.setPlace(store.placing.id, at, false);
+        this.selected = store.placing.id;
+        store.placing = null;
+        store.notify();
+      } else if (this.movingId) this.setPlace(this.movingId, at, false);
+      else {
+        this.selected = null;
+        if (store.focus) {
+          store.focus = null;
+          store.notify();
+        }
+      }
     }
     this.requestUpdate();
   }
@@ -512,6 +606,55 @@ export class SrMap extends LitElement {
     return { lines, step, px: step * pxPerKm };
   }
 
+  /** The card of the selected location: what it is today, and the way to move it. */
+  private popup(c: Pt, cnt: ReturnType<typeof counts> | null) {
+    const id = this.selected;
+    // while moving, the banner at the bottom says what to do: keep the map clear
+    if (!id || this.movingId === id) return nothing;
+    const sc = store.sc;
+    const day = store.prefs.day;
+    const school = sc.schools.find((s) => s.id === id);
+    const bso = sc.bsos.find((b) => b.id === id);
+    const g = school ?? bso;
+    if (!g) return nothing;
+    const p = this.toScreen(g, c);
+    if (p.x < -20 || p.y < -20 || p.x > this.w + 20 || p.y > this.h + 20) return nothing;
+    const below = p.y < 190;
+    const x = Math.max(130, Math.min(this.w - 130, p.x));
+    const color = school ? PALETTE[school.color % PALETTE.length]! : BSO_COLORS[bso!.color % BSO_COLORS.length]!;
+    const M = L().map;
+    const moving = this.movingId === id;
+    let lines;
+    if (school) {
+      const kids = sc.kids.filter((k) => k.school === id);
+      const today = kids.filter((k) => k.days[day] && !sc.absent[day].includes(k.id)).length;
+      const out = school.out[day];
+      const st = cnt?.schools.get(id);
+      lines = html`<span>${out == null ? M.noPickupOn(L().days[day]) : html`${M.outOn(L().days[day])} <b class="mono">${hhmm(out)}</b>`}</span>
+        <span>${M.kidsLine(kids.length, today)}</span>
+        ${sc.bsos.map((b) => {
+          const n = kids.filter((k) => k.bso === b.id).length;
+          return n ? html`<span><i class="sq" style="background:${BSO_COLORS[b.color % BSO_COLORS.length]};width:9px;height:9px;display:inline-block"></i> ${b.name}: <b>${n}</b></span>` : nothing;
+        })}
+        ${school.escort ? html`<span>${icon("hand", 12)} ${L().kids.fromClass}</span>` : nothing}
+        ${st?.waiting ? html`<span style="color:var(--warn-ink);font-weight:700">${M.waiting(st.waiting)} · ${Math.round(st.maxWait)}′</span>` : nothing}`;
+    } else {
+      const kids = sc.kids.filter((k) => k.bso === id).length;
+      const st = cnt?.bsos.get(id);
+      const parked = sc.vehicles.filter((v) => v.home === id).map((v) => v.name);
+      lines = html`<span>${M.bsoKids(kids)}</span>
+        ${st && st.total ? html`<span>${M.arrived(st.in, st.total)} (${hhmm(store.t)})</span>` : nothing}
+        ${parked.length ? html`<span>${icon("bus", 12)} ${parked.join(", ")}</span>` : nothing}`;
+    }
+    return html`<div class="ui popup ${below ? "below" : ""}" style="left:${x}px;top:${p.y}px;--c:${color}" @pointerdown=${(e: Event) => e.stopPropagation()}>
+      <h3><span class="grow ellipsis">${g.name}</span><button class="icon-btn" style="width:24px;height:24px" title=${M.close} @click=${() => ((this.selected = null), (this.movingId = null))}>${icon("x", 14)}</button></h3>
+      <div class="lines">${lines}</div>
+      <div class="acts">
+        <button class="btn small ${moving ? "on" : ""}" @click=${() => (this.movingId = moving ? null : id)}>${icon(moving ? "check" : "move", 14)} ${moving ? M.done : M.move}</button>
+      </div>
+    </div>`;
+  }
+
   override render() {
     const sc = store.sc;
     const dm = store.rdm;
@@ -574,8 +717,9 @@ export class SrMap extends LitElement {
       const anchor = left ? "end" : "start";
       const dx = left ? -17 : 17;
       const line2 = compact && !waiting ? "" : out == null ? L().map.noPickup : waiting ? L().map.waiting(waiting) : allGone ? L().map.allGone : t < out ? `${L().map.out} ${hhmm(out)} · ${total}` : `${hhmm(out)} · ${total}`;
-      return svg`<g class="school" data-id=${s.id} opacity=${out == null || (!total && res) ? 0.55 : 1}>
+      return svg`<g class="school ${this.selected === s.id ? "sel" : ""} ${this.movingId === s.id ? "moving" : ""}" data-id=${s.id} opacity=${out == null || (!total && res) ? 0.55 : 1}>
         <circle cx=${p.x} cy=${p.y} r="16" fill="transparent"></circle>
+        ${this.movingId === s.id ? svg`<circle class="ring" cx=${p.x} cy=${p.y} r="17"></circle>` : nothing}
         <circle class="mk" cx=${p.x} cy=${p.y} r="10.5" fill=${col}></circle>
         ${allGone ? svg`<path d="M${p.x - 4.5} ${p.y + 0.5} l3 3 l6 -6.5" fill="none" stroke=${inkOn(col)} stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path>` : nothing}
         ${
@@ -595,8 +739,9 @@ export class SrMap extends LitElement {
       const p = S(b);
       const col = BSO_COLORS[b.color % BSO_COLORS.length]!;
       const st = cnt?.bsos.get(b.id);
-      return svg`<g class="bso" data-id=${b.id}>
+      return svg`<g class="bso ${this.selected === b.id ? "sel" : ""} ${this.movingId === b.id ? "moving" : ""}" data-id=${b.id}>
         <rect x=${p.x - 21} y=${p.y - 21} width="42" height="42" fill="transparent"></rect>
+        ${this.movingId === b.id ? svg`<circle class="ring" cx=${p.x} cy=${p.y} r="26"></circle>` : nothing}
         <rect class="mk" x=${p.x - 16} y=${p.y - 16} width="32" height="32" rx="9" fill=${col}></rect>
         <g transform="translate(${p.x - 10} ${p.y - 10.5}) scale(0.84)" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">${iconPaths("house")}</g>
         <text class="halo" x=${p.x} y=${p.y + 32} text-anchor="middle" font-size=${compact ? 11.5 : 13} font-weight="800">${b.name}</text>
@@ -653,16 +798,17 @@ export class SrMap extends LitElement {
     const kmLabel = grid.step < 1 ? `${grid.step * 1000} m` : `${grid.step} km`;
 
     return html`<div
-      class="stage ${this.gesture?.kind === "pan" && this.gesture.moved ? "panning" : ""} ${placing ? "placing" : ""} ${this.moveMode ? "moving" : ""}"
+      class="stage ${this.gesture?.kind === "pan" && this.gesture.moved ? "panning" : ""} ${placing || this.movingId ? "placing" : ""}"
       @pointerdown=${this.down}
       @pointermove=${this.move}
       @pointerup=${this.up}
       @pointercancel=${this.up}
+      @contextmenu=${(e: Event) => e.preventDefault()}
       @wheel=${this.wheel}
       @dblclick=${(e: MouseEvent) => this.zoomAt(this.local(e), this.view.zoom + 1)}
     >
       <div class="tiles ${store.prefs.map}">${repeat(tiles, (x) => x.key, (x) => html`<img src=${x.src} alt="" draggable="false" style="left:${x.left}px;top:${x.top}px;width:${x.size + 0.6}px;height:${x.size + 0.6}px" />`)}</div>
-      <svg class="over ${this.moveMode ? "moving" : ""}" width=${this.w} height=${this.h} role="img" aria-label=${L().map.aria}>
+      <svg class="over" width=${this.w} height=${this.h} role="img" aria-label=${L().map.aria}>
         <g class="grid">${grid.lines}</g>
         ${routes} ${bsos} ${schools} ${vehicles}
       </svg>
@@ -680,13 +826,16 @@ export class SrMap extends LitElement {
       <button class="icon-btn" title=${L().map.zoomOut} @click=${() => this.zoomAt({ x: this.w / 2, y: this.h / 2 }, this.view.zoom - 1)}>${icon("minus")}</button>
       <button class="icon-btn" title=${L().map.fit} @click=${() => this.fitAll()}>${icon("fit")}</button>
       <button class="icon-btn ${store.prefs.map !== "off" ? "" : "on"}" title=${L().map.layer[store.prefs.map]} @click=${() => store.pref("map", styleNext[store.prefs.map])}>${icon("layers")}</button>
-      <button class="icon-btn ${this.moveMode ? "on" : ""}" title=${L().map.moveMode} @click=${() => (this.moveMode = !this.moveMode)}>${icon("move")}</button>
     </div>
     <div class="ui clock">${hhmm(t)}</div>
     <div class="ui attrib">
       <span class="scale"><i style="width:${grid.px}px"></i>${kmLabel}</span>
       ${store.prefs.map !== "off" ? html`© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>` : L().map.noBasemap}
     </div>
+    ${this.popup(c, cnt)}
+    ${this.movingId && !placing
+      ? html`<div class="ui banner">${L().map.moveHint(sc.bsos.find((b) => b.id === this.movingId)?.name ?? sc.schools.find((s) => s.id === this.movingId)?.name ?? "")}<button class="btn small" @click=${() => (this.movingId = null)}>${icon("check", 14)} ${L().map.done}</button></div>`
+      : nothing}
     ${placing ? html`<div class="ui banner">${L().map.placeHint(placingName ?? "")}<button class="btn small" @click=${() => ((store.placing = null), store.notify())}>${L().cancel}</button></div>` : nothing}`;
   }
 }

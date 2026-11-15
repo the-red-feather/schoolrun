@@ -3,7 +3,7 @@ import { checkScenario } from "./check";
 import { buildDay, kidsToday } from "./day";
 import { haversine } from "./geo";
 import { randomScenario, sampleScenario } from "./sample";
-import { finalize, schedule } from "./schedule";
+import { finalize, schedule, timeRun } from "./schedule";
 import { trips } from "./sim";
 import { Solver, covers, greedy } from "./solver";
 import { ALL_DAYS, hhmm, parseHhmm, type Day, type Scenario } from "./types";
@@ -175,4 +175,12 @@ test("times and distances", () => {
   const d = haversine({ lat: 52, lon: 4.35 }, { lat: 52.01, lon: 4.35 });
   expect(d).toBeGreaterThan(1.1);
   expect(d).toBeLessThan(1.12);
+});
+
+test("a run waits at the BSO, not on the way: it leaves as late as costs nobody anything", () => {
+  const dm = buildDay(sampleScenario(), 3);
+  const x = timeRun(dm, [{ key: "r|r1", n: 1 }, { key: "k|s6|b2", n: 3 }], "b1", 11 * 60 + 45, 18 * 60);
+  // the lift is ready at 14:20: no leaving at a quarter to twelve to wait two and a half hours
+  expect(x.depart).toBeGreaterThan(14 * 60);
+  expect(x.stops[0]!.on[0]!.pickup - x.stops[0]!.arrive).toBeLessThan(1);
 });
