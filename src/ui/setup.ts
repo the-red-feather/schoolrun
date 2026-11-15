@@ -6,6 +6,7 @@
  */
 import { LitElement, css, html, nothing } from "lit";
 import { customElement, state } from "lit/decorators.js";
+import { live } from "lit/directives/live.js";
 import { L } from "../i18n";
 import { BSO_COLORS, B_MAX_SEATS, DEFAULT_RULES, PALETTE, freeColor, freshId, hhmm, mayDrive, needsBusLicence, parseHhmm, week, type Licence, type Rules, type Scenario, type Week } from "../model/types";
 import { store, StoreController } from "../store";
@@ -379,9 +380,9 @@ export class SrSetup extends LitElement {
             </div>
             <div class="row">
               <span class="meta">${L().setup.parkedAt}</span>
-              <select @change=${(e: Event) => set((x) => (x.home = (e.target as HTMLSelectElement).value), true)}>${sc.bsos.map((b) => html`<option value=${b.id} ?selected=${v.home === b.id}>${b.name}</option>`)}</select>
+              <select .value=${live(v.home)} @change=${(e: Event) => set((x) => (x.home = (e.target as HTMLSelectElement).value), true)}>${sc.bsos.map((b) => html`<option value=${b.id} ?selected=${v.home === b.id}>${b.name}</option>`)}</select>
               <span class="meta">${L().setup.driver}</span>
-              <select @change=${(e: Event) => set((x) => (x.driver = (e.target as HTMLSelectElement).value || null), true)}>
+              <select .value=${live(v.driver ?? "")} @change=${(e: Event) => set((x) => (x.driver = (e.target as HTMLSelectElement).value || null), true)}>
                 <option value="" ?selected=${!v.driver}>${L().setup.anyDriver}</option>
                 ${sc.staff.filter((s) => mayDrive(s, v)).map((s) => html`<option value=${s.id} ?selected=${v.driver === s.id}>${s.name}</option>`)}
               </select>
@@ -412,13 +413,13 @@ export class SrSetup extends LitElement {
           return html`<div class="item">
             <div class="row">
               <input class="name" .value=${s.name} @change=${(e: Event) => set((x) => (x.name = (e.target as HTMLInputElement).value.trim() || s.name))} />
-              <select title=${L().setup.licence} @change=${(e: Event) => set((x) => (x.licence = +(e.target as HTMLSelectElement).value as Licence), true)}>
+              <select title=${L().setup.licence} .value=${live(String(s.licence))} @change=${(e: Event) => set((x) => (x.licence = +(e.target as HTMLSelectElement).value as Licence), true)}>
                 ${([0, 1, 2] as Licence[]).map((l) => html`<option value=${l} ?selected=${s.licence === l}>${L().setup.licences[l]}</option>`)}
               </select>
               <button class="icon-btn danger" title=${L().remove} @click=${() => this.ed((x) => (x.staff = x.staff.filter((y) => y.id !== s.id)), true)}>${icon("trash")}</button>
             </div>
             <div class="row">
-              <select @change=${(e: Event) => set((x) => (x.home = (e.target as HTMLSelectElement).value), true)}>${sc.bsos.map((b) => html`<option value=${b.id} ?selected=${s.home === b.id}>${b.name}</option>`)}</select>
+              <select .value=${live(s.home)} @change=${(e: Event) => set((x) => (x.home = (e.target as HTMLSelectElement).value), true)}>${sc.bsos.map((b) => html`<option value=${b.id} ?selected=${s.home === b.id}>${b.name}</option>`)}</select>
               ${this.days(s.days, (i) => set((x) => (x.days[i] = !x.days[i]), true))}
               ${this.time(s.from, (m) => set((x) => (x.from = m ?? s.from), true))}<span class="meta">–</span>${this.time(s.until, (m) => set((x) => (x.until = m ?? s.until), true))}
             </div>
@@ -453,9 +454,9 @@ export class SrSetup extends LitElement {
               <button class="icon-btn danger" title=${L().remove} @click=${() => this.ed((x) => (x.rides = x.rides.filter((y) => y.id !== r.id)), true)}>${icon("trash")}</button>
             </div>
             <div class="row">
-              <select @change=${(e: Event) => set((x) => (x.from = (e.target as HTMLSelectElement).value), true)}>${opts(r.from)}</select>
+              <select .value=${live(r.from)} @change=${(e: Event) => set((x) => (x.from = (e.target as HTMLSelectElement).value), true)}>${opts(r.from)}</select>
               <span class="meta">→</span>
-              <select @change=${(e: Event) => set((x) => (x.to = (e.target as HTMLSelectElement).value), true)}>${opts(r.to)}</select>
+              <select .value=${live(r.to)} @change=${(e: Event) => set((x) => (x.to = (e.target as HTMLSelectElement).value), true)}>${opts(r.to)}</select>
             </div>
             <div class="row">
               <span class="meta">${L().setup.readyAt}</span>${this.time(r.after, (m) => set((x) => (x.after = m ?? r.after), true))}

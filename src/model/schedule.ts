@@ -13,6 +13,8 @@ import type { Geo, Kid } from "./types";
 export interface Job {
   key: string;
   n: number;
+  /** Fixed by hand: stays on this vehicle with this count. */
+  pin?: boolean;
 }
 /** Per crew (same order as DayModel.crew): its runs, each a list of pickups. */
 export type Plan = Job[][][];
@@ -26,6 +28,7 @@ export interface Board {
   deliver: number;
   /** Minutes waited since ready (school out). */
   wait: number;
+  pin?: boolean;
   kids?: Kid[];
 }
 export interface Stop {
@@ -140,7 +143,7 @@ function permutations<T>(xs: T[]): T[][] {
 function drive(dm: DayModel, jobs: Job[], infos: JobInfo[], start: string, depart: number, escort: boolean, order: string[] | null): Timed {
   const r = dm.sc.rules;
   const stops: Stop[] = [];
-  const boards: Board[] = jobs.map((j) => ({ key: j.key, n: j.n, pickup: depart, deliver: depart, wait: 0 }));
+  const boards: Board[] = jobs.map((j) => ({ key: j.key, n: j.n, pickup: depart, deliver: depart, wait: 0, pin: j.pin }));
   let at = start;
   let t = depart;
   let km = 0;
@@ -266,7 +269,7 @@ export function timeRun(dm: DayModel, jobs: Job[], start: string, free: number, 
   let cache = caches.get(dm);
   if (!cache) caches.set(dm, (cache = new Map()));
   let key = `${start}@${free.toFixed(3)}~${until}:`;
-  for (const j of jobs) key += j.key + "*" + j.n + ",";
+  for (const j of jobs) key += j.key + "*" + j.n + (j.pin ? "!" : "") + ",";
   const hit = cache.get(key);
   if (hit) return hit;
   const infos = jobs.map((j) => dm.jobs.get(j.key)!);

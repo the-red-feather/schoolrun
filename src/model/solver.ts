@@ -6,6 +6,7 @@
  */
 import type { DayModel } from "./day";
 import { schedule, type Job, type Plan, type Result } from "./schedule";
+import type { Pin } from "./types";
 
 /** mulberry32: small, seeded. */
 export function rng(seed: number) {
@@ -69,6 +70,69 @@ export function repair(dm: DayModel, plan: Plan, vehicles: string[]): Plan | nul
   return p.some((b) => b.length) ? p : null;
 }
 
+/** The plan with `job` put where it adds least: any position of any run of the given vehicles (default: all), or a new run. */
+export function bestInsert(dm: DayModel, plan: Plan, job: Job, vehicles?: number[]): Plan {
+  let best: Plan | null = null;
+  let bestCost = Infinity;
+  const tryIt = (p: Plan) => {
+    const c = schedule(dm, p).cost;
+    if (c < bestCost) {
+      bestCost = c;
+      best = p;
+    }
+  };
+  plan.forEach((runs, bi) => {
+    if (vehicles && !vehicles.includes(bi)) return;
+    for (let ri = 0; ri <= runs.length; ri++) {
+      // a new run here
+      const p = clone(plan);
+      p[bi]!.splice(ri, 0, [{ ...job }]);
+      tryIt(p);
+      if (ri === runs.length) continue;
+      for (let pos = 0; pos <= runs[ri]!.length; pos++) {
+        const q = clone(plan);
+        q[bi]![ri]!.splice(pos, 0, { ...job });
+        tryIt(q);
+      }
+    }
+  });
+  return best ?? plan;
+}
+
+/**
+ * The pins put in: the plan's old pinned pickups taken out, the other
+ * pickups of the same groups trimmed to make room, and each pin that holds
+ * today (its vehicle drives, its group exists) put on its vehicle where it
+ * adds least. What's left over is for insertMissing.
+ */
+export function applyPins(dm: DayModel, plan: Plan, pins: Pin[]): Plan {
+  const p = clone(plan).map((b) => b.map((r) => r.filter((j) => !j.pin)));
+  const room = new Map([...dm.jobs.values()].map((j) => [j.key, j.total]));
+  const fixed: { bi: number; job: Job }[] = [];
+  for (const pin of pins) {
+    const bi = dm.crew.findIndex((c) => c.vehicle.id === pin.vehicle);
+    const n = Math.min(pin.n, room.get(pin.key) ?? 0);
+    if (bi < 0 || n <= 0) continue;
+    room.set(pin.key, (room.get(pin.key) ?? 0) - n);
+    fixed.push({ bi, job: { key: pin.key, n, pin: true } });
+  }
+  for (const b of p)
+    for (const r of b)
+      for (const j of r) {
+        const left = room.get(j.key) ?? 0;
+        j.n = Math.min(j.n, left);
+        room.set(j.key, left - j.n);
+      }
+  let q = tidy(p);
+  for (const f of fixed) q = bestInsert(dm, q, f.job, [f.bi]);
+  return q;
+}
+
+/** Which pins hold today: the others' vehicle doesn't drive, or their group isn't there. */
+export function pinsToday(dm: DayModel, pins: Pin[]) {
+  return pins.map((pin) => ({ pin, holds: dm.crew.some((c) => c.vehicle.id === pin.vehicle) && dm.jobs.has(pin.key) }));
+}
+
 /** Put what's missing where it adds least: any position of any run, or a new run. */
 export function insertMissing(dm: DayModel, start: Plan): Plan {
   let plan = clone(start);
@@ -83,41 +147,12 @@ export function insertMissing(dm: DayModel, start: Plan): Plan {
     // even pieces: 13 for 8 seats goes as 7 + 6, not 8 + 5
     const pieces = Math.ceil(left / cap);
     const sizes = Array.from({ length: pieces }, (_, i) => Math.floor(left / pieces) + (i < left % pieces ? 1 : 0));
-    for (const k of sizes) {
-      let best: Plan | null = null;
-      let bestCost = Infinity;
-      plan.forEach((runs, bi) => {
-        for (let ri = 0; ri <= runs.length; ri++) {
-          const positions = ri === runs.length ? 1 : runs[ri]!.length + 1;
-          for (let pos = 0; pos < positions; pos++) {
-            const p = clone(plan);
-            if (ri === runs.length) p[bi]!.push([{ key: job.key, n: k }]);
-            else p[bi]![ri]!.splice(pos, 0, { key: job.key, n: k });
-            const c = schedule(dm, p).cost;
-            if (c < bestCost) {
-              bestCost = c;
-              best = p;
-            }
-          }
-          // a new run in between
-          if (ri < runs.length) {
-            const p = clone(plan);
-            p[bi]!.splice(ri, 0, [{ key: job.key, n: k }]);
-            const c = schedule(dm, p).cost;
-            if (c < bestCost) {
-              bestCost = c;
-              best = p;
-            }
-          }
-        }
-      });
-      plan = best!;
-    }
+    for (const k of sizes) plan = bestInsert(dm, plan, { key: job.key, n: k });
   }
   return plan;
 }
 
-export const greedy = (dm: DayModel): Plan => insertMissing(dm, dm.crew.map(() => []));
+export const greedy = (dm: DayModel, pins: Pin[] = []): Plan => insertMissing(dm, applyPins(dm, dm.crew.map(() => []), pins));
 
 interface Slot {
   b: number;
@@ -129,8 +164,9 @@ function slots(p: Plan): Slot[] {
   p.forEach((runs, b) => runs.forEach((run, r) => run.forEach((_, i) => out.push({ b, r, i }))));
   return out;
 }
-function insertAnywhere(p: Plan, job: Job, rand: Rand) {
-  const b = Math.floor(rand() * p.length);
+/** Somewhere random: on any vehicle, or (pinned) on its own vehicle `own`. */
+function insertAnywhere(p: Plan, job: Job, rand: Rand, own?: number) {
+  const b = job.pin && own != null ? own : Math.floor(rand() * p.length);
   const runs = p[b]!;
   const r = Math.floor(rand() * (runs.length + 1));
   if (r === runs.length || rand() < 0.15) runs.splice(Math.min(r, runs.length), 0, [job]);
@@ -147,13 +183,14 @@ export function neighbour(dm: DayModel, p0: Plan, rand: Rand): Plan | null {
   if (m < 0.3) {
     const s = pick(all, rand);
     const [job] = p[s.b]![s.r]!.splice(s.i, 1);
-    insertAnywhere(p, job!, rand);
+    insertAnywhere(p, job!, rand, s.b);
   } else if (m < 0.45) {
     if (all.length < 2) return null;
     const a = pick(all, rand),
       b = pick(all, rand);
     const ja = at(a),
       jb = at(b);
+    if ((ja.pin || jb.pin) && a.b !== b.b) return null;
     p[a.b]![a.r]![a.i] = jb;
     p[b.b]![b.r]![b.i] = ja;
   } else if (m < 0.55) {
@@ -165,7 +202,7 @@ export function neighbour(dm: DayModel, p0: Plan, rand: Rand): Plan | null {
     const [lo, hi] = i < j ? [i, j] : [j, i];
     run.splice(lo, hi - lo + 1, ...run.slice(lo, hi + 1).reverse());
   } else if (m < 0.67) {
-    const big = all.filter((s) => at(s).n > 1 && dm.jobs.get(at(s).key)?.kind === "kids");
+    const big = all.filter((s) => at(s).n > 1 && !at(s).pin && dm.jobs.get(at(s).key)?.kind === "kids");
     if (!big.length) return null;
     const s = pick(big, rand);
     const job = at(s);
@@ -178,6 +215,7 @@ export function neighbour(dm: DayModel, p0: Plan, rand: Rand): Plan | null {
     const twins = all.filter((o) => (o.b !== s.b || o.r !== s.r || o.i !== s.i) && at(o).key === job.key);
     if (!twins.length) return null;
     const o = pick(twins, rand);
+    if (job.pin || at(o).pin) return null;
     job.n += at(o).n;
     at(o).n = 0;
   } else if (m < 0.87) {
@@ -187,6 +225,7 @@ export function neighbour(dm: DayModel, p0: Plan, rand: Rand): Plan | null {
     const twins = all.filter((o) => (o.b !== s.b || o.r !== s.r || o.i !== s.i) && at(o).key === job.key);
     if (!twins.length || job.n < 2) return null;
     const o = pick(twins, rand);
+    if (job.pin || at(o).pin) return null;
     const k = 1 + Math.floor(rand() * Math.min(3, job.n - 1));
     job.n -= k;
     at(o).n += k;
@@ -194,7 +233,8 @@ export function neighbour(dm: DayModel, p0: Plan, rand: Rand): Plan | null {
     const withRuns = p.map((r, b) => ({ r, b })).filter((x) => x.r.length);
     const from = pick(withRuns, rand);
     const [run] = from.r.splice(Math.floor(rand() * from.r.length), 1);
-    const to = p[Math.floor(rand() * p.length)]!;
+    // a run with a pinned pickup only moves within its own vehicle's day
+    const to = run!.some((j) => j.pin) ? from.r : p[Math.floor(rand() * p.length)]!;
     to.splice(Math.floor(rand() * (to.length + 1)), 0, run!);
   }
   return tidy(p);
@@ -213,17 +253,19 @@ export function ruin(dm: DayModel, p0: Plan, rand: Rand, share = 0): Plan | null
   const p = clone(p0);
   const all = slots(p);
   if (!all.length) return null;
+  const free = all.filter((s) => !p[s.b]![s.r]![s.i]!.pin);
+  if (!free.length) return null;
   if (share > 0) {
-    for (const s of all) if (rand() < share) p[s.b]![s.r]![s.i]!.n = 0;
+    for (const s of free) if (rand() < share) p[s.b]![s.r]![s.i]!.n = 0;
   } else if (rand() < 0.3) {
-    const withRuns = p.filter((r) => r.length);
-    const runs = pick(withRuns, rand);
-    runs.splice(Math.floor(rand() * runs.length), 1);
+    // a whole run (what isn't pinned of it)
+    const s = pick(free, rand);
+    for (const j of p[s.b]![s.r]!) if (!j.pin) j.n = 0;
   } else {
-    const k = 1 + Math.floor(rand() * Math.min(3, all.length));
+    const k = 1 + Math.floor(rand() * Math.min(3, free.length));
     const out = new Set<Slot>();
-    while (out.size < k) out.add(pick(all, rand));
-    for (const s of [...out].sort((a, b) => b.i - a.i)) p[s.b]![s.r]![s.i]!.n = 0;
+    while (out.size < k) out.add(pick(free, rand));
+    for (const s of out) p[s.b]![s.r]![s.i]!.n = 0;
   }
   return insertMissing(dm, tidy(p));
 }
@@ -239,15 +281,16 @@ export class Solver {
   readonly total: number;
   private t0: number;
 
-  constructor(dm: DayModel, opts: { seed?: number; iterations?: number; from?: Plan; vehicles?: string[] } = {}) {
+  constructor(dm: DayModel, opts: { seed?: number; iterations?: number; from?: Plan; vehicles?: string[]; pins?: Pin[] } = {}) {
     this.dm = dm;
     this.rand = rng(opts.seed ?? 1);
+    const pins = opts.pins ?? [];
     let start: Plan | null = null;
     if (opts.from && opts.vehicles) {
       const fixed = repair(dm, opts.from, opts.vehicles);
-      if (fixed) start = insertMissing(dm, fixed);
+      if (fixed) start = insertMissing(dm, applyPins(dm, fixed, pins));
     }
-    if (!start || !covers(dm, start)) start = greedy(dm);
+    if (!start || !covers(dm, start)) start = greedy(dm, pins);
     this.cur = start;
     this.bestResult = schedule(dm, start);
     this.curCost = this.bestResult.cost;

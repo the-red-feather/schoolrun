@@ -19,7 +19,15 @@ browser. Dutch by default, English with one click.
   to move it),
   a clock you can play or scrub, who is where right now (names on board,
   children still waiting, arrivals per BSO), the afternoon as a timeline, and
-  per vehicle its runs with every child's name: the driver's sheet.
+  per vehicle its runs with every child's name: the driver's sheet. The day's
+  numbers are small print at the bottom.
+- **Wie haalt wie op** (on Planning): the plan by hand. Per school→BSO group
+  and per lift, its pickups: pick the vehicle, set how many children, split a
+  pickup in two. Whatever you change is **pinned** (vehicle and count); the
+  solver plans everything else around the pins and never moves them. Pin or
+  unpin any pickup with one click. The **magic wand** (*Beste indeling*) runs
+  three fresh solves that keep the pins and keeps the best plan, the current
+  one included. Pins are saved per weekday.
 - **Kinderen**: every child in three columns, grouped by school (a coloured
   block) and within it by BSO. Rename, set the *groep* and contract days, call
   a child off for today, drag them to another BSO or school, or paste a class
@@ -53,7 +61,11 @@ days the bus stays put. Call him in sick on a Monday to see what that does.
   then improves with simulated annealing on: child-minutes waiting, person-
   minutes riding, vehicle-minutes driving, and heavy penalties for full
   vehicles, waits past the limit, missing caretakers, late lifts and overtime.
-  Seeded, a few milliseconds per frame, warm-started from the last plan.
+  Seeded, a few milliseconds per frame, warm-started from the last plan,
+  with ruin-and-recreate moves and reheating rounds; a plan that still has
+  problems gets two more fresh tries. Pinned pickups stay on their vehicle
+  with their count; the solver only chooses when in that vehicle's day they
+  happen.
 
 ## Saving
 

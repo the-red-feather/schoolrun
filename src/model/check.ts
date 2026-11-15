@@ -5,7 +5,7 @@
  */
 import { fromLocal } from "./geo";
 import { nameMaker } from "./sample";
-import { BSO_COLORS, DEFAULT_RULES, PALETTE, freshId, week, type Bso, type Kid, type Licence, type Ride, type Rules, type Scenario, type School, type Staff, type Vehicle, type Week } from "./types";
+import { BSO_COLORS, DEFAULT_RULES, PALETTE, freshId, week, type Bso, type Kid, type Licence, type Pin, type Ride, type Rules, type Scenario, type School, type Staff, type Vehicle, type Week } from "./types";
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const num = (v: unknown, d: number, lo: number, hi: number) => (typeof v === "number" && Number.isFinite(v) ? clamp(v, lo, hi) : d);
@@ -127,8 +127,14 @@ export function checkScenario(raw: unknown): Scenario | null {
   };
   const ids = new Set([...kids.map((k) => k.id), ...staff.map((s) => s.id), ...vehicles.map((v) => v.id)]);
   const absent = weekOf<string[]>(r.absent, [], (x): x is string[] => Array.isArray(x)).map((a) => [...new Set(a.filter((id) => ids.has(id)))]) as Week<string[]>;
+  const vehicleIds = new Set(vehicles.map((v) => v.id));
+  const pins = weekOf<unknown[]>(r.pins, [], (x): x is unknown[] => Array.isArray(x)).map((day) =>
+    day
+      .filter((p: any) => typeof p?.key === "string" && /^(k\|[^|]+\|[^|]+|r\|.+)$/.test(p.key) && vehicleIds.has(p?.vehicle))
+      .map((p: any) => ({ key: p.key as string, vehicle: p.vehicle as string, n: Math.round(num(p.n, 1, 1, 200)) })),
+  ) as Week<Pin[]>;
   const view = r.view && typeof r.view === "object" ? { lat: lat(r.view.lat, here.lat), lon: lon(r.view.lon, here.lon), zoom: num(r.view.zoom, 13, 2, 19) } : undefined;
-  return { version: 2, name: str(r.name, "Schoolrun", 60), bsos, schools, kids, vehicles, staff, rides, rules, absent, view };
+  return { version: 2, name: str(r.name, "Schoolrun", 60), bsos, schools, kids, vehicles, staff, rides, rules, absent, pins, view };
 }
 
 /** The first SCHOOLRUN (one hub, places in km on a 10 × 10 map, kids as numbers): put it in Berkel en Rodenrijs, give the children names. */

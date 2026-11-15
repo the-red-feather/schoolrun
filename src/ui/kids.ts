@@ -7,6 +7,7 @@
 import { LitElement, css, html, nothing } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
+import { live } from "lit/directives/live.js";
 import { L } from "../i18n";
 import { kidState } from "../model/sim";
 import { nameMaker } from "../model/sample";
@@ -529,7 +530,7 @@ export class SrKids extends LitElement {
         <button class="grip" title=${L_.kids.move} @click=${() => (this.moving = this.moving === k.id ? null : k.id)}>${icon("grip", 14)}</button>
         <i class="st ${st}" style=${st === "riding" && vcol ? `background:${vcol}` : ""} title=${title}></i>
         <input class="name bare" .value=${k.name} @change=${(e: Event) => this.kidEdit(k.id, (x) => (x.name = (e.target as HTMLInputElement).value.trim() || x.name))} aria-label=${L_.kids.name} />
-        <select class="g bare" title=${L_.kids.group} @change=${(e: Event) => this.kidEdit(k.id, (x) => (x.group = +(e.target as HTMLSelectElement).value), true)}>
+        <select class="g bare" title=${L_.kids.group} .value=${live(String(k.group))} @change=${(e: Event) => this.kidEdit(k.id, (x) => (x.group = +(e.target as HTMLSelectElement).value), true)}>
           ${[1, 2, 3, 4, 5, 6, 7, 8].map((g) => html`<option value=${g} ?selected=${k.group === g}>g${g}</option>`)}
         </select>
         <span class="days" title=${L_.kids.daysTitle}>

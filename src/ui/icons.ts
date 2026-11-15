@@ -40,6 +40,9 @@ const P: Record<string, SVGTemplateResult> = {
   route: svg`<circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="6" r="2.2"/><path d="M8 18h7a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h7"/>`,
   menu: svg`<path d="M4 7h16M4 12h16M4 17h16"/>`,
   chevron: svg`<path d="m9 6 6 6-6 6"/>`,
+  pushpin: svg`<path d="M9 4h6l-1 5 3 3v2H7v-2l3-3z"/><path d="M12 14v6"/>`,
+  wand: svg`<path d="m4 20 11-11"/><path d="m13 7 2 2"/><path d="M17 3v3M15.5 4.5h3M20 9v2M19 10h2M10 3v1.5M9.25 3.75h1.5"/>`,
+  scissors: svg`<circle cx="6" cy="7" r="2.5"/><circle cx="6" cy="17" r="2.5"/><path d="M8 8.5 20 17M8 15.5 20 7"/>`,
   copy: svg`<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>`,
 };
 

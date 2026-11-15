@@ -12,7 +12,7 @@ import { finalize, type Plan, type Result } from "./model/schedule";
 import { trips, type Trip } from "./model/sim";
 import { Solver } from "./model/solver";
 import type { Day, MapView, Scenario } from "./model/types";
-import { setLang, type Lang } from "./i18n";
+import { L, setLang, type Lang } from "./i18n";
 
 const KEY = "schoolrun.v2";
 const ATTEMPTS = 3;
@@ -93,6 +93,9 @@ class Store {
 
   /** Which try this is: a plan with problems gets up to ATTEMPTS fresh starts. */
   attempt = 1;
+  /** The wand is at work (three tries, keep the best). */
+  wanding = false;
+  private wandFrom: number | undefined;
   private plans = new Map<string, { plan: Plan; vehicles: string[] }>();
   private solver: Solver | null = null;
   private seed = 1;
@@ -219,15 +222,16 @@ class Store {
   }
 
   /** Solve the day again, from the last plan for this weekday (or from scratch), a few milliseconds a frame. */
-  solve(fresh = false, attempt = 1) {
+  solve(fresh = false, attempt = 1, wand = false) {
     clearTimeout(this.timer);
     if (fresh) this.seed++;
     const prev = fresh ? undefined : this.plans.get(this.planKey());
-    const s = new Solver(this.dm, { seed: this.seed, from: prev?.plan, vehicles: prev?.vehicles });
+    const s = new Solver(this.dm, { seed: this.seed, from: prev?.plan, vehicles: prev?.vehicles, pins: this.sc.pins[this.prefs.day] });
     this.solver = s;
     this.attempt = attempt;
-    // a later attempt only replaces the plan shown when it's better
-    const keep = attempt > 1 && this.res && this.rdm === s.dm ? this.res.cost : Infinity;
+    this.wanding = wand;
+    // a later attempt (or the wand) only replaces the plan shown when it's better
+    const keep = (attempt > 1 || wand) && this.res && this.rdm === s.dm ? this.res.cost : Infinity;
     const better = () => s.bestResult.cost < keep - 1e-9;
     if (better()) this.adopt(s);
     this.progress = s.finished ? 1 : 0;
@@ -242,14 +246,69 @@ class Store {
         this.solver = null;
         // still trouble? try again from scratch, another way (twice at most), keep the best
         const r = this.res;
-        if (r && attempt < ATTEMPTS && (r.lateKids || r.escortMissing || r.ridesLate || r.overtime > 0.5)) {
-          this.solve(true, attempt + 1);
+        if (r && attempt < ATTEMPTS && (wand || r.lateKids || r.escortMissing || r.ridesLate || r.overtime > 0.5)) {
+          this.solve(true, attempt + 1, wand);
           return;
+        }
+        if (wand) {
+          this.wanding = false;
+          const before = this.wandFrom ?? Infinity;
+          this.say(r && r.cost < before - 0.5 ? L().assign.wandBetter(Math.round(((before - r.cost) / before) * 100)) : L().assign.wandSame);
         }
       } else requestAnimationFrame(tick);
       this.notify();
     };
     requestAnimationFrame(tick);
+  }
+
+  /** The magic wand: three fresh tries from scratch, the pins kept, the best plan (the current one included) wins. */
+  wand() {
+    this.wandFrom = this.res && this.rdm === this.dm ? this.res.cost : undefined;
+    this.solve(true, 1, true);
+    this.notify();
+  }
+
+  // ── editing the plan by hand ──
+  /** The pickups of a job in the plan shown, in pickup order: who, how many, pinned. */
+  pieces(key: string): { vehicle: string; n: number; pin: boolean; pickup: number }[] {
+    const out: { vehicle: string; n: number; pin: boolean; pickup: number }[] = [];
+    for (const d of this.res?.days ?? []) for (const r of d.runs) for (const b of r.boards) if (b.key === key) out.push({ vehicle: d.crew.vehicle.id, n: b.n, pin: !!b.pin, pickup: b.pickup });
+    return out.sort((a, b) => a.pickup - b.pickup);
+  }
+
+  /**
+   * Change one pickup of a job by hand: another vehicle, another count, pinned
+   * or not. A change pins it; the pinned pickups of the job are stored, the
+   * rest is left to the solver.
+   */
+  setPiece(key: string, index: number, change: { vehicle?: string; n?: number; pin?: boolean; split?: boolean }) {
+    const ps = this.pieces(key).map((p) => ({ ...p }));
+    const p = ps[index];
+    const total = this.rdm.jobs.get(key)?.total ?? 0;
+    if (!p || !total) return;
+    if (change.vehicle) {
+      p.vehicle = change.vehicle;
+      p.pin = true;
+    }
+    if (change.n != null) {
+      const others = ps.reduce((n, q, i) => n + (i !== index && q.pin ? q.n : 0), 0);
+      p.n = Math.max(1, Math.min(Math.round(change.n), total - others));
+      p.pin = true;
+    }
+    if (change.split && p.n > 1) {
+      // half stays (pinned), the other half is for the solver, or for you to give to someone else
+      p.n = Math.ceil(p.n / 2);
+      p.pin = true;
+    }
+    if (change.pin != null) p.pin = change.pin;
+    const pins = ps.filter((q) => q.pin).map((q) => ({ key, vehicle: q.vehicle, n: q.n }));
+    const day = this.prefs.day;
+    this.edit((sc) => (sc.pins[day] = [...sc.pins[day].filter((x) => x.key !== key), ...pins]), { now: true });
+  }
+
+  unpinAll() {
+    const day = this.prefs.day;
+    this.edit((sc) => (sc.pins[day] = []), { now: true });
   }
 
   private adopt(s: Solver) {

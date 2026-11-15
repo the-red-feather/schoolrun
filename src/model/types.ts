@@ -116,6 +116,14 @@ export interface Rules {
   wDrive: number;
 }
 
+/** A pickup fixed by hand: this many of this job (kids of a school for a BSO, or a lift) go with this vehicle. The solver keeps it. */
+export interface Pin {
+  /** Job key: "k|<school>|<bso>" or "r|<ride>". */
+  key: string;
+  vehicle: string;
+  n: number;
+}
+
 export interface MapView {
   lat: number;
   lon: number;
@@ -134,6 +142,8 @@ export interface Scenario {
   rules: Rules;
   /** This week's exceptions: kids, staff and vehicles that are out on a weekday (ill, in the garage). */
   absent: Week<string[]>;
+  /** Per weekday, the pickups fixed by hand. */
+  pins: Week<Pin[]>;
   view?: MapView;
 }
 

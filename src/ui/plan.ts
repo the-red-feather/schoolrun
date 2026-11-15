@@ -16,6 +16,8 @@ import { icon, type IconName } from "./icons";
 import { base } from "./shared";
 import "./map";
 import "./timeline";
+import "./assign";
+import { pinsToday } from "../model/solver";
 
 interface Issue {
   level: "bad" | "warn" | "info";
@@ -36,6 +38,13 @@ export function issuesOf(sc: Scenario, dm: DayModel, res: Result | null): Issue[
     else if (i.kind === "noPickup") out.push({ level: "warn", icon: "school", text: T.noPickup(i.school.name, i.kids) });
     else if (i.kind === "orphans") out.push({ level: "warn", icon: "warn", text: T.orphans(i.kids) });
     else if (i.kind === "tooBig") out.push({ level: "bad", icon: "warn", text: T.tooSmall });
+  }
+  for (const { pin, holds } of pinsToday(dm, sc.pins[dm.day])) {
+    if (holds) continue;
+    const v = sc.vehicles.find((x) => x.id === pin.vehicle)?.name ?? "?";
+    const [kind, a, b] = pin.key.split("|");
+    const what = kind === "k" ? `${name(a!)} → ${name(b!)} (${pin.n})` : (sc.rides.find((r) => r.id === a)?.who ?? "?");
+    out.push({ level: "warn", icon: "pushpin", text: T.pinLost(what, v) });
   }
   if (!res) return out;
   if (res.over > 0) out.push({ level: "bad", icon: "bus", text: T.over(res.over) });
@@ -90,48 +99,20 @@ export class SrPlan extends LitElement {
         display: grid;
         gap: 18px;
       }
-      .kpis {
-        display: grid;
-        grid-template-columns: repeat(7, minmax(0, 1fr));
-        gap: 10px;
-      }
-      @media (max-width: 1100px) {
-        .kpis {
-          grid-template-columns: repeat(4, minmax(0, 1fr));
-        }
-      }
-      @media (max-width: 560px) {
-        .kpis {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-      }
-      .kpi {
-        border-radius: 14px;
-        padding: 10px 14px 11px;
-        background: color-mix(in oklab, var(--c) 13%, var(--surface));
-        border: 1.5px solid color-mix(in oklab, var(--c) 35%, transparent);
-        min-width: 0;
-        position: relative;
-        overflow: hidden;
-      }
-      .kpi b {
-        display: block;
-        font-family: var(--mono);
-        font-size: 1.55rem;
-        font-weight: 700;
-        letter-spacing: -0.03em;
-        line-height: 1.2;
-        color: color-mix(in oklab, var(--c) 70%, var(--ink));
-        white-space: nowrap;
-      }
-      .kpi span {
-        font-size: 0.75rem;
-        font-weight: 700;
+      .small {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 16px;
+        align-items: baseline;
+        margin: 4px 0 0;
+        padding-top: 14px;
+        border-top: 1px solid var(--hair);
+        font-size: 0.78rem;
         color: var(--dim);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        display: block;
+      }
+      .small b {
+        color: var(--ink);
+        font-weight: 700;
       }
       .today {
         display: grid;
@@ -402,6 +383,12 @@ export class SrPlan extends LitElement {
         color: var(--dim);
         margin-right: 6px;
       }
+      .pinmark {
+        display: inline-grid;
+        vertical-align: -2px;
+        margin-left: 2px;
+        color: var(--ink);
+      }
       .esc {
         font-size: 0.8rem;
         display: inline-flex;
@@ -437,7 +424,7 @@ export class SrPlan extends LitElement {
     const dm = store.rdm;
     const res = store.res;
     return html`<div class="page">
-      ${this.kpis(res)} ${this.today(sc, dm, res)}
+      ${this.today(sc, dm, res)}
       <div class="main">
         <div class="mapcol">
           <sr-map></sr-map>
@@ -454,6 +441,7 @@ export class SrPlan extends LitElement {
           </section>
         </div>
       </div>
+      <sr-assign></sr-assign>
       <section class="card">
         <div class="card-head"><h2 class="grow">${L().plan.afternoon}</h2></div>
         <sr-timeline></sr-timeline>
@@ -462,21 +450,30 @@ export class SrPlan extends LitElement {
         <div class="card-head"><h2 class="grow">${L().plan.runs}</h2><span class="hint">${L().plan.runsHint}</span></div>
         <div class="runs">${(res?.days ?? []).map((d) => this.vehicleCard(d, dm))}</div>
       </section>
+      ${this.stats(res)}
     </div>`;
   }
 
-  private kpis(res: Result | null) {
+  /** The day's numbers, as small print. */
+  private stats(res: Result | null) {
+    if (!res) return nothing;
     const sc = store.sc;
-    const kids = res?.kids ?? 0;
-    const k = (c: string, v: string, l: string) => html`<div class="kpi" style="--c:${c}"><b>${v}</b><span>${l}</span></div>`;
-    const wait = res ? Math.round(res.waitMax) : 0;
-    const issues = issuesOf(sc, store.rdm, res).filter((i) => i.level !== "info").length;
-    return html`<div class="kpis">
-      ${k("var(--c6)", String(kids), L().kpi.kids)} ${k("var(--c5)", String(res?.runs ?? 0), L().kpi.runs)}
-      ${k(wait > sc.rules.maxWait ? "var(--bad)" : wait > sc.rules.maxWait / 2 ? "var(--warn)" : "var(--good)", res ? `${wait}′` : "–", L().kpi.maxWait)}
-      ${k("var(--c1)", res && kids ? `${(res.waitTotal / kids).toFixed(1)}′` : "–", L().kpi.avgWait)} ${k("var(--c8)", res && kids ? `${Math.round(res.rideTotal / kids)}′` : "–", L().kpi.avgRide)}
-      ${k("var(--c7)", res && res.runs ? hhmm(res.done) : "–", L().kpi.done)} ${k(issues ? "var(--bad)" : "var(--good)", issues ? String(issues) : "✓", L().kpi.problems)}
-    </div>`;
+    const K = L().kpi;
+    const kids = res.kids;
+    const wait = Math.round(res.waitMax);
+    const parts: [string, string, string?][] = [
+      [K.kids, String(kids)],
+      [K.runs, String(res.runs)],
+      [K.maxWait, `${wait}′`, wait > sc.rules.maxWait ? "var(--bad)" : undefined],
+      [K.avgWait, kids ? `${(res.waitTotal / kids).toFixed(1)}′` : "–"],
+      [K.avgRide, kids ? `${Math.round(res.rideTotal / kids)}′` : "–"],
+      [K.done, res.runs ? hhmm(res.done) : "–"],
+      [L().stats.km, res.km.toFixed(1)],
+    ];
+    return html`<p class="small">
+      <span class="label">${L().stats.title}</span>
+      ${parts.map(([l, v, c]) => html`<span>${l} <b class="mono" style=${c ? `color:${c}` : ""}>${v}</b></span>`)}
+    </p>`;
   }
 
   private today(sc: Scenario, dm: DayModel, res: Result | null) {
@@ -530,7 +527,7 @@ export class SrPlan extends LitElement {
         ${speeds.map((s) => html`<button class=${store.prefs.speed === s ? "on" : ""} @click=${() => store.pref("speed", s)}>${s}×</button>`)}
       </div>
       <span class="solving">${store.solving ? html`${L().plan.solving}${store.attempt > 1 ? ` (${L().plan.attempt(store.attempt)})` : ""}<span class="meter"><i style="width:${store.progress * 100}%"></i></span>` : html`${icon("check", 15)} ${L().plan.solved}`}</span>
-      <button class="btn small ghost" title=${L().plan.againTitle} @click=${() => store.solve(true)}>${icon("dice", 16)} ${L().plan.again}</button>
+      <button class="btn small ghost" title=${L().assign.wandTitle} ?disabled=${store.wanding || !store.rdm.crew.length} @click=${() => store.wand()}>${icon("wand", 16)} ${store.wanding ? L().assign.wandBusy : L().assign.wand}</button>
     </div>`;
   }
 
@@ -635,7 +632,7 @@ export class SrPlan extends LitElement {
             >
               <div class="row"><span class="when">${hhmm(r.depart)}–${hhmm(r.back)}</span><span class="grow"></span><span class="badge">${r.maxLoad}/${v.seats}</span>${icon("chevron", 14)}</div>
               <div class="chain">
-                ${name(r.start)} ${r.stops.map((s) => html` → <b>${name(s.place)}</b>${s.on.length ? html` <span class="mono dim">+${s.on.reduce((n, b) => n + b.n, 0)}</span>` : nothing}${s.off.length ? html` <span class="mono dim">−${s.off.reduce((n, b) => n + b.n, 0)}</span>` : nothing}`)}
+                ${name(r.start)} ${r.stops.map((s) => html` → <b>${name(s.place)}</b>${s.on.length ? html` <span class="mono dim">+${s.on.reduce((n, b) => n + b.n, 0)}</span>${s.on.some((b) => b.pin) ? html`<span class="pinmark" title=${L().assign.pinned}>${icon("pushpin", 12)}</span>` : nothing}` : nothing}${s.off.length ? html` <span class="mono dim">−${s.off.reduce((n, b) => n + b.n, 0)}</span>` : nothing}`)}
               </div>
               ${r.needsEscort ? html`<span class="esc ${r.escort ? "" : "missing"}">${icon("hand", 13)} ${r.escort ? L().plan.ridesAlong(staff(r.escort)) : L().plan.noEscort}</span>` : nothing}
               ${open

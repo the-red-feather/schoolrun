@@ -128,7 +128,7 @@ export function sampleScenario(): Scenario {
     { id: "r1", who: "Noor Jansen (invaller)", from: "b2", to: "b1", after: T(14, 20), before: T(14, 50), days: d(0, 3) },
     { id: "r2", who: "Lotte Brouwer", from: "b1", to: "s7", after: T(14, 30), before: T(14, 55), days: d(1) },
   ];
-  return { version: 2, name: "Berkel en Rodenrijs", bsos, schools, kids, vehicles, staff, rides, rules: { ...DEFAULT_RULES }, absent: [[], [], [], [], []] };
+  return { version: 2, name: "Berkel en Rodenrijs", bsos, schools, kids, vehicles, staff, rides, rules: { ...DEFAULT_RULES }, absent: [[], [], [], [], []], pins: [[], [], [], [], []] };
 }
 
 /** A random town around `o`: 2–3 BSOs, 5–9 schools of 5–20 children, some split over two BSOs. */
@@ -176,7 +176,7 @@ export function randomScenario(seed: number, o: { lat: number; lon: number } = H
     from: T(11, 30),
     until: T(18, 30),
   }));
-  return { version: 2, name: `Willekeurig ${seed % 1000}`, bsos, schools, kids, vehicles, staff, rides: [], rules: { ...DEFAULT_RULES }, absent: [[], [], [], [], []] };
+  return { version: 2, name: `Willekeurig ${seed % 1000}`, bsos, schools, kids, vehicles, staff, rides: [], rules: { ...DEFAULT_RULES }, absent: [[], [], [], [], []], pins: [[], [], [], [], []] };
 }
 
 /** An empty week: one BSO, nothing else. */
@@ -192,5 +192,6 @@ export function emptyScenario(o: { lat: number; lon: number } = HOME): Scenario 
     rides: [],
     rules: { ...DEFAULT_RULES },
     absent: [[], [], [], [], []],
+    pins: [[], [], [], [], []],
   };
 }

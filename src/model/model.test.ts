@@ -5,7 +5,7 @@ import { haversine } from "./geo";
 import { randomScenario, sampleScenario } from "./sample";
 import { finalize, schedule, timeRun } from "./schedule";
 import { trips } from "./sim";
-import { Solver, covers, greedy } from "./solver";
+import { Solver, covers, greedy, pinsToday } from "./solver";
 import { ALL_DAYS, hhmm, parseHhmm, type Day, type Scenario } from "./types";
 
 const solve = (sc: Scenario, day: Day, iterations = 6000) => {
@@ -183,4 +183,43 @@ test("a run waits at the BSO, not on the way: it leaves as late as costs nobody 
   // the lift is ready at 14:20: no leaving at a quarter to twelve to wait two and a half hours
   expect(x.depart).toBeGreaterThan(14 * 60);
   expect(x.stops[0]!.on[0]!.pickup - x.stops[0]!.arrive).toBeLessThan(1);
+});
+
+describe("pins: pickups fixed by hand", () => {
+  const sc = sampleScenario();
+  const onVehicle = (res: ReturnType<typeof finalize>, key: string, vehicle: string) =>
+    res.days.filter((d) => d.crew.vehicle.id === vehicle).flatMap((d) => d.runs.flatMap((r) => r.boards.filter((b) => b.key === key && b.pin)));
+
+  test("a pinned pickup stays on its vehicle with its count, whatever the solver does", () => {
+    // De Regenboog's 12 for De Boomhut: 5 of them with Busje 3 (parked at the other BSO)
+    const pins = [{ key: "k|s1|b1", vehicle: "v3", n: 5 }, { key: "r|r1", vehicle: "v4", n: 1 }];
+    const dm = buildDay(sc, 0);
+    for (const seed of [1, 2]) {
+      const s = new Solver(dm, { seed, iterations: 5000, pins });
+      const res = finalize(dm, s.run());
+      expect(covers(dm, s.best)).toBe(true);
+      expect(onVehicle(res, "k|s1|b1", "v3").reduce((n, b) => n + b.n, 0)).toBe(5);
+      expect(onVehicle(res, "r|r1", "v4").length).toBe(1);
+      expect(trips(res).size).toBe([...dm.jobs.values()].reduce((n, j) => n + j.kids.length, 0));
+    }
+  });
+
+  test("a pin bigger than its group is capped; a pin on a vehicle that doesn't drive is let go", () => {
+    const x = structuredClone(sc);
+    x.absent[0] = ["st2"]; // no bus today
+    const dm = buildDay(x, 0);
+    const total = dm.jobs.get("k|s4|b1")!.total;
+    const pins = [{ key: "k|s4|b1", vehicle: "v1", n: 99 }, { key: "k|s1|b1", vehicle: "v4", n: 6 }];
+    const s = new Solver(dm, { seed: 1, iterations: 3000, pins });
+    const res = finalize(dm, s.run());
+    expect(covers(dm, s.best)).toBe(true);
+    expect(onVehicle(res, "k|s4|b1", "v1").reduce((n, b) => n + b.n, 0)).toBe(total);
+    expect(pinsToday(dm, pins).map((p) => p.holds)).toEqual([true, false]);
+  });
+
+  test("pins survive storage, and nonsense pins don't", () => {
+    const x = structuredClone(sc) as any;
+    x.pins[2] = [{ key: "k|s1|b1", vehicle: "v3", n: 4 }, { key: "nonsense", vehicle: "v3", n: 1 }, { key: "r|r1", vehicle: "gone", n: 1 }];
+    expect(checkScenario(x)!.pins[2]).toEqual([{ key: "k|s1|b1", vehicle: "v3", n: 4 }]);
+  });
 });
