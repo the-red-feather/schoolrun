@@ -1,0 +1,24 @@
+{
+  "name": "schoolrun",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "BSO-vervoer: elke middag de kinderen van school naar de opvang, gepland en gesimuleerd.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "tsc --noEmit -p .",
+    "test": "bun test",
+    "ci": "tsc --noEmit -p . && bun test && vite build"
+  },
+  "dependencies": {
+    "lit": "^3.3.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.0",
+    "playwright-core": "1.62.1",
+    "typescript": "^5.6.0",
+    "vite": "^7.0.0"
+  }
+}

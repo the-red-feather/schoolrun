@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Schoolrun · BSO-vervoer</title>
+    <meta name="description" content="Elke middag de kinderen van school naar de BSO: gepland, gesimuleerd en opgelost." />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Red+Hat+Mono:wght@400..700&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --font: "Bricolage Grotesque", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        --mono: "Red Hat Mono", ui-monospace, "SF Mono", Menlo, monospace;
+        --gutter: clamp(14px, 3vw, 28px);
+        --radius: 10px;
+        --radius-lg: 18px;
+        /* the splash: schools, vehicles, accents */
+        --c0: #e5383b; --c1: #f77f00; --c2: #f4b400; --c3: #8ac926; --c4: #2a9d5c; --c5: #0fa3b1;
+        --c6: #1e88e5; --c7: #4c4cdb; --c8: #8e44ad; --c9: #e84393; --c10: #b5179e; --c11: #a0522d;
+        /* a colour per weekday */
+        --d0: #e5383b; --d1: #f77f00; --d2: #0fa3b1; --d3: #1e88e5; --d4: #b5179e;
+        --pop: #ff5a36;
+        --good: #1f9d55;
+        --bad: #e0393e;
+        --warn: #f29d00;
+
+        --bg: #f7f4ee;
+        --surface: #ffffff;
+        --surface-2: #f3efe7;
+        --field: #ffffff;
+        --ink: #16163f;
+        --dim: #5e5f7d;
+        --faint: #9c9cb4;
+        --hair: #e7e1d6;
+        --hair-2: #d3ccbf;
+        --header: #16163f;
+        --warn-ink: #b86e00;
+        --map-bg: #ecebe6;
+        --map-filter: grayscale(1) contrast(0.88) brightness(1.06);
+        --map-opacity: 0.72;
+        --map-halo: #ffffff;
+        --grid: rgba(22, 22, 63, 0.07);
+        --grid-major: rgba(22, 22, 63, 0.17);
+        --shadow: 0 1px 2px rgba(22, 22, 63, 0.05), 0 6px 22px rgba(22, 22, 63, 0.06);
+        color-scheme: light;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+          --bg: #0f1026; --surface: #181a38; --surface-2: #1f2246; --field: #13152f; --ink: #f2f1ff; --dim: #a9aacb; --faint: #6d6f95;
+          --hair: #2a2d55; --hair-2: #3a3e6e; --header: #090a1c; --warn-ink: #ffb733; --map-bg: #14162e;
+          --map-filter: grayscale(1) invert(1) brightness(0.82) contrast(0.85); --map-opacity: 0.6; --map-halo: #14162e;
+          --grid: rgba(255, 255, 255, 0.055); --grid-major: rgba(255, 255, 255, 0.13);
+          --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 26px rgba(0, 0, 0, 0.25);
+          color-scheme: dark;
+        }
+      }
+      :root[data-theme="dark"] {
+        --bg: #0f1026; --surface: #181a38; --surface-2: #1f2246; --field: #13152f; --ink: #f2f1ff; --dim: #a9aacb; --faint: #6d6f95;
+        --hair: #2a2d55; --hair-2: #3a3e6e; --header: #090a1c; --warn-ink: #ffb733; --map-bg: #14162e;
+        --map-filter: grayscale(1) invert(1) brightness(0.82) contrast(0.85); --map-opacity: 0.6; --map-halo: #14162e;
+        --grid: rgba(255, 255, 255, 0.055); --grid-major: rgba(255, 255, 255, 0.13);
+        --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 26px rgba(0, 0, 0, 0.25);
+        color-scheme: dark;
+      }
+      html,
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: var(--font);
+        -webkit-font-smoothing: antialiased;
+      }
+      body {
+        overflow-x: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <sr-app></sr-app>
+    <noscript>Schoolrun heeft JavaScript nodig.</noscript>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
